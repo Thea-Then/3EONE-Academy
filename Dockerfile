@@ -29,7 +29,9 @@ FROM php:8.4-fpm
 # System Dependencies
 # ------------------------------------------------------------
 RUN apt-get update && apt-get install -y \
+    nginx \
     git \
+    supervisor \
     curl \
     unzip \
     zip \
