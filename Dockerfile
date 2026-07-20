@@ -26,10 +26,9 @@ RUN composer dump-autoload --optimize
 FROM php:8.4-fpm
 
 # ------------------------------------------------------------
-# Build Dependencies & System Packages
+# System Dependencies
 # ------------------------------------------------------------
 RUN apt-get update && apt-get install -y \
-    $PHPIZE_DEPS \
     git \
     curl \
     unzip \
@@ -64,13 +63,6 @@ RUN docker-php-ext-install -j"$(nproc)" \
     zip
 
 # ------------------------------------------------------------
-# Redis Extension
-# ------------------------------------------------------------
-RUN pecl channel-update pecl.php.net \
-    && printf "\n" | pecl install redis \
-    && docker-php-ext-enable redis
-
-# ------------------------------------------------------------
 # PHP Configuration
 # ------------------------------------------------------------
 RUN mv "$PHP_INI_DIR/php.ini-production" \
@@ -99,7 +91,10 @@ RUN mkdir -p \
 # ------------------------------------------------------------
 # Laravel Optimization
 # ------------------------------------------------------------
-RUN php artisan package:discover --ansi || true
+RUN php artisan package:discover --ansi || true \
+    && php artisan config:cache || true \
+    && php artisan route:cache || true \
+    && php artisan view:cache || true
 
 EXPOSE 9000
 
