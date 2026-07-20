@@ -1,6 +1,6 @@
 # ============================================================
 # Stage 1: Composer
-
+# ============================================================
 FROM composer:2 AS vendor
 
 WORKDIR /app
@@ -11,31 +11,22 @@ RUN composer install \
     --no-dev \
     --prefer-dist \
     --optimize-autoloader \
-    --no-interaction \
-    --no-progress \
-    --no-scripts
-
+    --no-interaction
 
 COPY . .
 
-RUN composer dump-autoload \
-    --optimize
-
+RUN composer dump-autoload --optimize
 
 # ============================================================
-# Stage 2: PHP-FPM
+# Stage 2: PHP + Apache
 # ============================================================
-FROM php:8.4-fpm
-
+FROM php:8.4-apache
 
 RUN apt-get update && apt-get install -y \
     git \
-    procps \
-    procps \
     unzip \
     zip \
     curl \
-    supervisor \
     libpq-dev \
     libzip-dev \
     libicu-dev \
@@ -45,61 +36,47 @@ RUN apt-get update && apt-get install -y \
     libjpeg62-turbo-dev \
     libfreetype6-dev \
     libwebp-dev \
-    libgmp-dev \
-    libldap2-dev \
-    libxslt1-dev \
-    $PHPIZE_DEPS \
     && rm -rf /var/lib/apt/lists/*
-
 
 RUN docker-php-ext-configure gd \
     --with-freetype \
     --with-jpeg \
     --with-webp
 
-
-RUN docker-php-ext-install -j$(nproc) \
+RUN docker-php-ext-install \
     bcmath \
     exif \
     gd \
     intl \
     opcache \
-    pcntl \
     pdo_pgsql \
     pgsql \
     zip
 
-
 RUN pecl install redis \
     && docker-php-ext-enable redis
 
-
-COPY docker/php/opcache.ini \
-    /usr/local/etc/php/conf.d/opcache.ini
-
+RUN a2enmod rewrite
 
 WORKDIR /var/www/html
 
-
 COPY . .
-
 COPY --from=vendor /app/vendor ./vendor
 
+RUN sed -ri -e 's!/var/www/html!/var/www/html/public!g' \
+    /etc/apache2/sites-available/*.conf \
+    /etc/apache2/apache2.conf
 
 RUN mkdir -p \
-        storage/framework/cache \
-        storage/framework/sessions \
-        storage/framework/views \
-        bootstrap/cache \
-    && chown -R www-data:www-data \
-        storage \
-        bootstrap/cache
+    storage/framework/cache \
+    storage/framework/sessions \
+    storage/framework/views \
+    bootstrap/cache
 
+RUN chown -R www-data:www-data \
+    storage \
+    bootstrap/cache
 
-USER www-data
+EXPOSE 80
 
-
-EXPOSE 9000
-
-
-CMD ["php-fpm"]
+CMD ["apache2-foreground"]
