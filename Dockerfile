@@ -26,13 +26,14 @@ RUN composer dump-autoload --optimize
 FROM php:8.4-fpm
 
 # ------------------------------------------------------------
-# System Packages
+# Build Dependencies & System Packages
 # ------------------------------------------------------------
 RUN apt-get update && apt-get install -y \
+    $PHPIZE_DEPS \
     git \
+    curl \
     unzip \
     zip \
-    curl \
     libpq-dev \
     libzip-dev \
     libicu-dev \
@@ -52,7 +53,7 @@ RUN docker-php-ext-configure gd \
     --with-jpeg \
     --with-webp
 
-RUN docker-php-ext-install -j$(nproc) \
+RUN docker-php-ext-install -j"$(nproc)" \
     bcmath \
     exif \
     gd \
@@ -62,8 +63,11 @@ RUN docker-php-ext-install -j$(nproc) \
     pgsql \
     zip
 
-# Redis
-RUN pecl install redis \
+# ------------------------------------------------------------
+# Redis Extension
+# ------------------------------------------------------------
+RUN pecl channel-update pecl.php.net \
+    && printf "\n" | pecl install redis \
     && docker-php-ext-enable redis
 
 # ------------------------------------------------------------
@@ -74,24 +78,27 @@ RUN mv "$PHP_INI_DIR/php.ini-production" \
 
 WORKDIR /var/www/html
 
+# ------------------------------------------------------------
+# Application
+# ------------------------------------------------------------
 COPY . .
 
 COPY --from=vendor /app/vendor ./vendor
 
+# ------------------------------------------------------------
+# Laravel Permissions
+# ------------------------------------------------------------
 RUN mkdir -p \
     storage/framework/cache \
     storage/framework/sessions \
     storage/framework/views \
-    bootstrap/cache
+    bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
 
-RUN chown -R www-data:www-data \
-    storage \
-    bootstrap/cache
-
-RUN chmod -R 775 \
-    storage \
-    bootstrap/cache
-
+# ------------------------------------------------------------
+# Laravel Optimization
+# ------------------------------------------------------------
 RUN php artisan package:discover --ansi || true
 
 EXPOSE 9000
